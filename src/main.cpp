@@ -1,11 +1,23 @@
 #include <iostream>
+#include <string>
 #include "memory_pool/memory_pool.hpp"
 
+struct Person {
+    std::string name;
+    int age;
+};
+
 int main () {
-    MemoryPool pool;
-    int* a = pool.allocate();
-    *a = 10;
-    std::cout << *a << std::endl;
+    MemoryPool<Person> pool(1000);
+    Person* a = pool.allocate();
+    
+    a->age = 10;
+    a->name = "hendra";
+    std::cout << a->name << std::endl;
+    std::cout << a->age << std::endl;
     pool.deallocate(a);
-    std::cout << *a << std::endl;
+    // *a = 10;
+    Person* b = pool.allocate();
+    std::cout << b->name << std::endl;
+    std::cout << b->age << std::endl;
 }

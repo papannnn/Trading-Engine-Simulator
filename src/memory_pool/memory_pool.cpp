@@ -1,40 +1,52 @@
-#include <stdlib.h>
+#include <cstddef>
+#include <cstdlib>
 #include <algorithm>
 #include "memory_pool.hpp"
 
 struct FreeList {
-    FreeList* next;
+    FreeList *next;
 };
 
-MemoryPool::MemoryPool() {
-    char *chunk = reinterpret_cast<char*>(malloc(1024));
-    size_t blockSize = std::max(sizeof(FreeList), sizeof(int));
-    size_t blockCnt = 1024 / blockSize;
+template<typename T>
+MemoryPool<T>::MemoryPool(size_t capacity_) {
+    char *chunk = reinterpret_cast<char*>(malloc(capacity_));
 
-    this->freeListHead = reinterpret_cast<FreeList*>(chunk);
-    FreeList* curr = this->freeListHead;
-    for (int i = 1; i < blockCnt; i++) {
-        char* next = chunk + (blockSize * i);
-        FreeList* nextPtr = reinterpret_cast<FreeList*>(next);
-        curr->next = nextPtr;
-        curr = nextPtr;
+    size_t itemSize = std::max(sizeof(FreeList), sizeof(T));
+    size_t chunkSize = capacity_ / itemSize;
+
+    if (chunkSize == 0) {
+        this->headFreeList_ = nullptr;
+        return;
     }
 
+    headFreeList_ = reinterpret_cast<FreeList*>(chunk);
+    FreeList *curr = headFreeList_;
+    for (int i = 1; i < chunkSize; i++) {
+        char *next = chunk + (i * itemSize);
+        FreeList *nextFreeList = reinterpret_cast<FreeList*>(next);
+        curr->next = nextFreeList;
+        curr = curr->next;
+    }
     curr->next = nullptr;
 }
 
-int* MemoryPool::allocate() {
-    if (this->freeListHead == nullptr) {
+template<typename T>
+T* MemoryPool<T>::allocate() {
+    if (headFreeList_ == nullptr) {
         return nullptr;
     }
 
-    FreeList* curr = freeListHead;
-    freeListHead = freeListHead->next;
-    return reinterpret_cast<int*>(curr);
+    FreeList *curr = headFreeList_;
+    headFreeList_ = curr->next;
+
+    T* result = new(reinterpret_cast<void*>(curr)) T();
+    return result;
 }
 
-void MemoryPool::deallocate(int* ptr) {
-    FreeList* block = reinterpret_cast<FreeList*>(ptr);
-    block->next = this->freeListHead;
-    this->freeListHead = block;
+template<typename T>
+void MemoryPool<T>::deallocate(T* ptr) {
+    ptr->~T();
+    FreeList *curr = reinterpret_cast<FreeList*>(ptr);
+    curr->next = headFreeList_;
+    headFreeList_ = curr;
 }
