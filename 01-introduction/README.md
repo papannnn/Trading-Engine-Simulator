@@ -40,3 +40,23 @@ flowchart LR
 
 *s1 – s6 is strategy that can be executed by Strategy Node X*
 
+The reason we require Exchange Connector because each exchange might having different way of communicating, we called this **protocol**.
+
+This is just an example
+
+For example, Chicago Mercantile Exchange (CME) might need to communicate using Binary Protocol in order to send order to that exchange.
+
+Or maybe Intercontinental Exchange (ICE) might want to communicate using FIX Protocol.
+
+```mermaid
+flowchart LR
+    subgraph Example[" "]
+        direction LR
+        CME --> Binary[Binary Protocol]
+        ICE --> FIX[FIX Protocol]
+    end
+
+    classDef red fill:none,stroke:#e03131,stroke-width:2px
+    class CME,ICE,Binary,FIX red
+    style Example fill:none,stroke:#e03131,stroke-width:2px
+```
