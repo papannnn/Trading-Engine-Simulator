@@ -4,6 +4,8 @@ I learned all of this knowledge from my mentor, shoutout to [Karan Lodhi Rajput]
 
 If you interested, you can also visit his [youtube channel](https://www.youtube.com/channel/UCl2vVwtbL0CIeB8YKK6q4ig)
 
+## Introduction
+
 In other companies production system, this can be different, but the main point still almost the same.
 
 - **Trader** operates the system using GUI
@@ -54,6 +56,8 @@ flowchart LR
 
 *s1 – s6 is strategy that can be executed by Strategy Node X*
 
+## Exchange Connector
+
 The reason we require Exchange Connector because each exchange might having different way of communicating, we called this **protocol**.
 
 This is just an example
@@ -77,7 +81,7 @@ flowchart LR
 
 So **Exchange Connector** is not only for forwarding the request from the **Trader** to the **Exchange**, but also acts as an adapter for the request object to a form that can any **Exchange** can understand.
 
-#
+## Market Data Feed Handler
 
 **Market Data Feed Handler** acts as a listener for every market activity on the **Exchange**.
 
@@ -181,3 +185,4 @@ TCP protocol is reliable because it make sure the receiver get the message. One 
 
 That means, if **Exchange** is sending 1000 message to 1000 HFT Companies. Not only **Exchange** need to send message 1 mil times, it also will get acks from each HFT Companies, more accurately, it will get 1 mil of acks. That's a lot of acks to be processed.
 
+## UDP Protocol
