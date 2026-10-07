@@ -3,11 +3,11 @@ Based on what I did learned, overall the Trader Facing HFT System will look like
 In other companies production system, this can be different, but the main point still almost the same.
 
 - **Trader** operates the system using GUI
-- **Risk Management System (RMS)** will check the risk & reject Trader's command if RMS detect some risk.
-- **Strategy service** will decide what to buy or sell, at what price, when to cancel
+- **Risk Management System (RMS)** will check the risk & reject Trader's command / Strategy execution if RMS detect some risk.
+- **Strategy service** will decide what to buy or sell, at what price, when to cancel automatically based on the data it knows (Current price, how many stock we own, floating profit, etc).
 - **Exchange connector** will convert the request that system understands into something that can be understand by specific exchanges.
 - **Order Management System** tells you have many stocks you have, running order status, floating profit / loss.
-- **Market Data Feed Handler** listening the exchange activity and updating own own orderbook.
+- **Market Data Feed Handler** listening the exchange activity and updating it's own orderbook.
 
 ```mermaid
 flowchart LR
@@ -24,7 +24,7 @@ flowchart LR
     subgraph Colo["Colocation (bare metal next to exchange)"]
         MDFH["Market Data<br/>Feed Handler"]
         Strategy["Strategy Nodes<br/>(each strategy pinned to one node)"]
-        Risk["Pre-trade Risk<br/>(inline gate)"]
+        Risk["Risk Management<br/>Service"]
         EC[Exchange Connector]
         MDFH -- "Local order book" --> Strategy
         Strategy -- "New / Cancel / Amend" --> Risk
