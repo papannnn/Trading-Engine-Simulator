@@ -1,5 +1,9 @@
 Based on what I did learned, overall the Trader Facing HFT System will look like this.
 
+I learned all of this knowledge from my mentor, shoutout to [Karan Lodhi Rajput](https://www.linkedin.com/in/karan-lodhi-rajput-b1a44b105/) for sharing this knowledge to me by one on one. 
+
+If you interested, you can also visit his [youtube channel](https://www.youtube.com/channel/UCl2vVwtbL0CIeB8YKK6q4ig)
+
 In other companies production system, this can be different, but the main point still almost the same.
 
 - **Trader** operates the system using GUI
@@ -143,4 +147,37 @@ flowchart TB
     OB -- "Notify orderbook changes<br/>(callback / shared memory)" --> S[Strategy]
     MDFH -. "Gap detected:<br/>request retransmit / snapshot" .-> EX
 ```
+
+You may wondering, why **Exchange** sends market activity using UDP, why not using TCP?.
+
+### TCP is one to one connection
+
+TCP protocol is one to one connection, if there's X number of receiver, that means **Exchange** need to have X number of connections opened.
+
+```mermaid
+flowchart LR
+    EX[Exchange] --> Us[Our HFT Company]
+    EX --> C1["HFT Company<br/>Competitor #1"]
+    EX --> C2["HFT Company<br/>Competitor #2"]
+    EX --> C3["HFT Company<br/>Competitor #3"]
+    EX --> C4["HFT Company<br/>Competitor #..."]
+```
+
+Imagine if there's thousands of HFT company want to listen to the **Exchange**, that means **Exchange** need to have thousands of TCP Connections running.
+
+Not only that, if we want to send `Y` number packets, we need to multiply by `Z` number of connections.
+
+```c++
+for (int i = 0 ; i < connections.size(); i++) {
+    sendMessage(packet, connections[i]);
+}
+```
+
+Imagine we want to send 1000 packets, for 1000 HFT companies. That means we're gonna send 1 mil times, that's inefficient.
+
+### Unecessary TCP acks
+
+TCP protocol is reliable because it make sure the receiver get the message. One of the mechanism to make sure receiver get the message by acks mechanism.
+
+That means, if **Exchange** is sending 1000 message to 1000 HFT Companies. Not only **Exchange** need to send message 1 mil times, it also will get acks from each HFT Companies, more accurately, it will get 1 mil of acks. That's a lot of acks to be processed.
 
