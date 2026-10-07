@@ -73,18 +73,74 @@ flowchart LR
 
 So **Exchange Connector** is not only for forwarding the request from the **Trader** to the **Exchange**, but also acts as an adapter for the request object to a form that can any **Exchange** can understand.
 
-```mermaid
-flowchart LR
-    subgraph HFT["HFT System"]
-        direction LR
-        Strategy -- "Request object" --> EC[Exchange Connector]
-    end
+#
 
-    EC -- "Binary Protocol" --> CME
-    EC -- "FIX Protocol" --> ICE
-    EC -- "JSON" --> HKEX
+**Market Data Feed Handler** acts as a listener for every market activity on the **Exchange**.
 
-    classDef red fill:none,stroke:#e03131,stroke-width:2px
-    class Strategy,EC,CME,ICE,HKEX red
-    style HFT fill:none,stroke:#e03131,stroke-width:2px
+**Exchange** will sends a raw packets, each of packets contains >= 1 message.
+
+Here's a simplified example how packets looks like:
+
 ```
+Packet #1001
+  Sent at   : 09:30:00.000123456
+  Messages  : 4
+
+  [1] New order   order 5003   ABC   Buy    500 @ 100.50
+  [2] Modify      order 5001   ABC   qty 300 -> 200   (price 100.40)
+  [3] Cancel      order 4998   ABC
+  [4] Trade       ABC   100 @ 100.60   (sell order 5002 partly filled)
+```
+
+This will means:
+
+1. Someone created an order to buy 500 unit `ABC` stock at $100.50 with ID 5003
+2. Someone modify an order from 300 to 200 unit for `ABC` stock at price level $100.40 with ID 5001
+3. Someone canceled the order for buying stock `ABC` with ID 4998
+4. Trade happened for stock `ABC`, sold 100 unit, but partly filled with ID 5002.
+
+With these information, we can create the orderbook that looks like this (Simplified).
+
+```
+          Buy           |           Sell
+   Qty       Price      |      Price       Qty
+   800      100.50      |     100.60       200
+   600      100.40      |     100.70       400
+   900      100.30      |     100.80       700
+```
+
+And then, based on the data from Orderbook, Strategy service now can decide what to do on `ABC` stock (Buy, Sell, Modify, Cancel, etc).
+
+You may wondering, why we need sequence ID for each packets?
+
+**Exchange** sends packets using UDP protocol, UDP is fast, but unreliable, it's using fire and forget mechanism.
+
+```
+   Exchange                        Feed Handler
+      |                          (last seq = 100)
+      |                                  |
+      |------ packet #101 -------X       |   lost on the network
+      |                                  |
+      |------ packet #102 -------------->|   expected #101, got #102
+      |                                  |   -> gap! #101 is missing
+      |                                  |   -> hold #102, pause strategy
+      |                                  |
+      |<----- resend #101 ---------------|
+      |                                  |
+      |------ packet #101 -------------->|   apply #101, then #102
+      |                                  |   last seq = 102, book OK
+```
+
+Assuming we're already in sequence number `100`, we expect to process packet number `101` in next, because we're using UDP, there's a chance packet number `101` got lost, then comes packet number `102`, but we haven't processed packet number `101`. 
+
+There's must be something wrong, so when packet got lost, we can ask to **Exchange** again to retransmit packet no `101`.
+
+```mermaid
+flowchart TB
+    EX[Exchange] -- "UDP multicast" --> NIC["Network Interface Card<br/>(NIC)"]
+    NIC -- "Raw packets" --> MDFH["Market Data Feed Handler<br/><br/>1. Sequence check<br/>2. Decode messages<br/>3. Book update"]
+    MDFH -- "New order / Cancel /<br/>Modify / Trade" --> OB[Orderbook]
+    OB -- "Notify orderbook changes<br/>(callback / shared memory)" --> S[Strategy]
+    MDFH -. "Gap detected:<br/>request retransmit / snapshot" .-> EX
+```
+
