@@ -6,36 +6,46 @@ In other companies production system, this can be different, but the main point 
 - **Risk Management System (RMS)** will check the risk & reject Trader's command if RMS detect some risk.
 - **Strategy service** will decide what to buy or sell, at what price, when to cancel
 - **Exchange connector** will convert the request that system understands into something that can be understand by specific exchanges.
+- **Order Management System** tells you have many stocks you have, running order status, floating profit / loss.
+- **Market Data Feed Handler** listening the exchange activity and updating own own orderbook.
 
 ```mermaid
 flowchart LR
-    Trader((Trader)) -- "Input command<br/>(which strategy,<br/>trading param, etc)" --> GUI
+    Trader((Trader)) --> GUI
 
-    subgraph Cloud["Cloud based (AWS, GCP, etc)"]
-        GUI[GUI] --> LB[Load Balancer]
-        LB -- Validation --> Risk[Risk Management<br/>Service]
+    subgraph Control["Control plane (office or cloud)"]
+        GUI[Trader GUI]
+        Router[Command Router]
+        OMS["Order Management Service<br/>(positions, P&L)"]
+        GUI -- "Commands" --> Router
+        OMS -- "Positions, fills,<br/>floating P&L" --> GUI
     end
 
-    LB ---> N1
-    LB -- "Find which node" ---> N2
-    LB ---> N3
-
-    subgraph BareMetal["Bare Metal (Connected with cable with exchange)"]
-        N1["Strategy Node 1<br/>(s1, s2, s3)"] --> EC[Exchange<br/>Connector]
-        N2["Strategy Node 2<br/>(s2, s4, s5)"] --> EC
-        N3["Strategy Node 3<br/>(s3, s5, s6)"] --> EC
+    subgraph Colo["Colocation (bare metal next to exchange)"]
+        MDFH["Market Data<br/>Feed Handler"]
+        Strategy["Strategy Nodes<br/>(each strategy pinned to one node)"]
+        Risk["Pre-trade Risk<br/>(inline gate)"]
+        EC[Exchange Connector]
+        MDFH -- "Local order book" --> Strategy
+        Strategy -- "New / Cancel / Amend" --> Risk
+        Risk -- "Approved orders" --> EC
+        EC -- "Acks, fills, rejects" --> Strategy
     end
 
-    EC -- "Put / Cancel Order" --> Exchange
+    Router -- "Start / stop,<br/>set params" --> Strategy
+    Router -- "Limits,<br/>kill switch" --> Risk
 
-    subgraph Exchange
-        direction TB
-        CME ~~~ ICE ~~~ HKEX ~~~ ETC["etc..."]
-    end
+    EX["Exchange<br/>CME / ICE / HKEX / etc."]
+    EC -- "Order entry (TCP)<br/>FIX or binary" --> EX
+    EX -- "Execution reports" --> EC
+    EX -- "Market data<br/>(UDP multicast)" --> MDFH
+    EC -- "Execution reports" --> OMS
+    EX -. "Drop copy" .-> OMS
+    MDFH -. "Prices for P&L" .-> OMS
 
-    style Cloud fill:none,stroke:#2f9e44,stroke-width:2px
-    style BareMetal fill:none,stroke:#1971c2,stroke-width:2px
-    style Exchange fill:none,stroke:#e03131,stroke-width:2px
+    style Control fill:none,stroke:#2f9e44,stroke-width:2px
+    style Colo fill:none,stroke:#1971c2,stroke-width:2px
+    style EX fill:none,stroke:#e03131,stroke-width:2px,color:#e03131
 ```
 
 *s1 – s6 is strategy that can be executed by Strategy Node X*
@@ -59,4 +69,22 @@ flowchart LR
     classDef red fill:none,stroke:#e03131,stroke-width:2px
     class CME,ICE,Binary,FIX red
     style Example fill:none,stroke:#e03131,stroke-width:2px
+```
+
+So **Exchange Connector** is not only for forwarding the request from the **Trader** to the **Exchange**, but also acts as an adapter for the request object to a form that can any **Exchange** can understand.
+
+```mermaid
+flowchart LR
+    subgraph HFT["HFT System"]
+        direction LR
+        Strategy -- "Request object" --> EC[Exchange Connector]
+    end
+
+    EC -- "Binary Protocol" --> CME
+    EC -- "FIX Protocol" --> ICE
+    EC -- "JSON" --> HKEX
+
+    classDef red fill:none,stroke:#e03131,stroke-width:2px
+    class Strategy,EC,CME,ICE,HKEX red
+    style HFT fill:none,stroke:#e03131,stroke-width:2px
 ```
