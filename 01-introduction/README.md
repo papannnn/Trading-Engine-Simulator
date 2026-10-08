@@ -81,6 +81,18 @@ flowchart LR
 
 So **Exchange Connector** is not only for forwarding the request from the **Trader** to the **Exchange**, but also acts as an adapter for the request object to a form that can any **Exchange** can understand.
 
+```mermaid
+flowchart LR
+    subgraph HFT["HFT System"]
+        direction LR
+        Strategy -- "Request object" --> EC[Exchange Connector]
+    end
+
+    EC -- "Binary Protocol" --> CME
+    EC -- "FIX Protocol" --> ICE
+    EC -- "JSON" --> HKEX
+```
+
 ## Market Data Feed Handler
 
 **Market Data Feed Handler** acts as a listener for every market activity on the **Exchange**.
@@ -195,7 +207,7 @@ Unicast is one on one communication, like TCP does.
 
 ### Broadcast
 
-Broadcast will send to all receiver, even though some receiver doesn't interested to listen to some kind of packets.
+Broadcast will send to all receiver, even though some receiver maybe doesn't interested to listen to some kind of packets.
 
 ```mermaid
 ---
@@ -241,3 +253,15 @@ flowchart LR
     style Stock fill:none,stroke:#2f9e44,stroke-width:2px,color:#2f9e44
     style Futures fill:none,stroke:#e03131,stroke-width:2px,color:#e03131
 ```
+
+That's the reason we're using UDP Multicast, as you can see, **Exchange** just need to send the packet into 1 connection, and the network will handle the distribution. 
+
+
+```mermaid
+flowchart LR
+    EX[Exchange] -- "Packets" --> NET[Networks]
+    NET -- "Distribute" --> All((All clients))
+```
+
+## Backtest Data
+
