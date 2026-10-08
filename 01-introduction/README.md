@@ -186,3 +186,58 @@ TCP protocol is reliable because it make sure the receiver get the message. One 
 That means, if **Exchange** is sending 1000 message to 1000 HFT Companies. Not only **Exchange** need to send message 1 mil times, it also will get acks from each HFT Companies, more accurately, it will get 1 mil of acks. That's a lot of acks to be processed.
 
 ## UDP Protocol
+
+Now let's talk about UDP Protocol, UDP Protocol has 3 types.
+
+### Unicast
+
+Unicast is one on one communication, like TCP does.
+
+### Broadcast
+
+Broadcast will send to all receiver, even though some receiver doesn't interested to listen to some kind of packets.
+
+```mermaid
+---
+title: Broadcast
+---
+flowchart LR
+    EX[Exchange] -- "Send all packets<br/>to everyone" --> All
+
+    subgraph All["Everyone on the same network"]
+        Us[Our HFT Company]
+        C1["HFT Company<br/>Competitor #1"]
+        C2["HFT Company<br/>Competitor #2"]
+        C3["HFT Company<br/>Competitor #3"]
+        C4["HFT Company<br/>Competitor #..."]
+    end
+
+    style All fill:none,stroke:#868e96,stroke-width:2px
+```
+
+### Multicast
+
+Multicast is different, **Exchange** only sends the packets to the specific group that interested to that specific packets.
+
+```mermaid
+---
+title: Multicast
+---
+flowchart LR
+    EX[Exchange] -- "Send packets<br/>stock related only" --> Stock
+    EX -- "Send packets<br/>futures related only" --> Futures
+
+    subgraph Stock["Multicast Group Stock"]
+        Us[Our HFT Company]
+        C1["HFT Company<br/>Competitor #1"]
+    end
+
+    subgraph Futures["Multicast Group Futures"]
+        C2["HFT Company<br/>Competitor #2"]
+        C3["HFT Company<br/>Competitor #3"]
+        C4["HFT Company<br/>Competitor #..."]
+    end
+
+    style Stock fill:none,stroke:#2f9e44,stroke-width:2px,color:#2f9e44
+    style Futures fill:none,stroke:#e03131,stroke-width:2px,color:#e03131
+```
