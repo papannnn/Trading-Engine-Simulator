@@ -1,8 +1,8 @@
 Based on what I did learned, overall the Trader Facing HFT System will look like this.
 
-I learned all of this knowledge from my mentor, shoutout to [Karan Lodhi Rajput](https://www.linkedin.com/in/karan-lodhi-rajput-b1a44b105/) for sharing this knowledge to me by one on one. 
+I learned all of this knowledge from doing a personal discussion with someone, shoutout to [Karan Lodhi Rajput](https://www.linkedin.com/in/karan-lodhi-rajput-b1a44b105/) for sharing this knowledge to me. 
 
-If you interested, you can also visit his [youtube channel](https://www.youtube.com/channel/UCl2vVwtbL0CIeB8YKK6q4ig)
+He also have a youtube channel that talks about HFT stuff. If you interested, you can also visit his [youtube channel](https://www.youtube.com/channel/UCl2vVwtbL0CIeB8YKK6q4ig)
 
 ## Introduction
 
