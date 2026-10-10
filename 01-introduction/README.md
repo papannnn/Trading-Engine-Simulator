@@ -164,7 +164,7 @@ flowchart TB
     MDFH -. "Gap detected:<br/>request retransmit / snapshot" .-> EX
 ```
 
-You may wondering, why **Exchange** sends market activity using UDP, why not using TCP?.
+You may wondering, why **Exchange** sends market activity using UDP, why not using TCP?
 
 ### TCP is one to one connection
 
@@ -265,3 +265,37 @@ flowchart LR
 
 ## Backtest Data
 
+In an **Exchange**, there will be hundreds of stocks getting traded. In one HFT firms, it's very rare for a firm to trade all of the stocks in the **Exchange**.
+
+```mermaid
+%%{init: {"flowchart": {"curve": "linear"}}}%%
+flowchart LR
+    EX["<br/><br/><br/>Exchange<br/><br/><br/><br/>"] -- "Sends AAPL activity" --> HFT["<br/><br/><br/>HFT System<br/><br/><br/><br/>"]
+    EX -- "Sends AMZN activity" --> HFT
+    EX -- "Sends MSFT activity" --> HFT
+    EX -- "Sends GOOGL activity" --> HFT
+    EX -- "Sends ... activity" --> HFT
+
+    style EX fill:none,stroke:#e03131,stroke-width:2px
+    style HFT fill:none,stroke:#1971c2,stroke-width:2px
+```
+
+That means not every stock activity will ever be used to build the Orderbook, but these stock activity can be useful in the future.
+
+You can do this by putting those specific message to database, because of this, you can simulate market activity using those historical data.
+
+```mermaid
+%%{init: {"flowchart": {"curve": "linear"}}}%%
+flowchart LR
+    EX["<br/>Exchange<br/><br/>"] -- "Sends AAPL activity<br/>(Used)" --> MDFH["<br/>Market Data<br/>Feed Handler<br/><br/>"]
+    EX -- "Sends AMZN activity<br/>(Not used)" --> MDFH
+    MDFH -- "Build orderbook<br/>using AAPL activity" --> OB[Orderbook]
+    MDFH -- "Insert db for backtest<br/>in the future" --> DB[(Database)]
+
+    style EX fill:none,stroke:#e03131,stroke-width:2px
+    style MDFH fill:none,stroke:#1971c2,stroke-width:2px
+    style OB fill:none,stroke:#1971c2,stroke-width:2px
+    style DB fill:none,stroke:#1971c2,stroke-width:2px
+```
+
+## How to do recovery when our system is down
