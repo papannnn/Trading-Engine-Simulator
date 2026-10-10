@@ -298,4 +298,16 @@ flowchart LR
     style DB fill:none,stroke:#1971c2,stroke-width:2px
 ```
 
+```mermaid
+flowchart LR
+    DB[(Database)] -- "Read recorded<br/>AAPL activity" --> BE["Backtest Engine<br/>(simulated exchange)"]
+    BE -- "Replays<br/>AAPL activity" --> MDFH["Market Data<br/>Feed Handler"]
+    MDFH -- "Build orderbook<br/>using AAPL activity" --> OB[Orderbook]
+
+    style DB fill:none,stroke:#1971c2,stroke-width:2px
+    style BE fill:none,stroke:#e03131,stroke-width:2px
+    style MDFH fill:none,stroke:#1971c2,stroke-width:2px
+    style OB fill:none,stroke:#1971c2,stroke-width:2px
+```
+
 ## How to do recovery when our system is down
