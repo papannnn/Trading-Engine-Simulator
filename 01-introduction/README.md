@@ -12,7 +12,7 @@ In other companies production system, this can be different, but the main point 
 - **Risk Management System (RMS)** will check the risk & reject Trader's command / Strategy execution if RMS detect some risk.
 - **Strategy service** will decide what to buy or sell, at what price, when to cancel automatically based on the data it knows (Current price, how many stock we own, floating profit, etc).
 - **Exchange connector** will convert the request that system understands into something that can be understand by specific exchanges.
-- **Order Management System** tells you have many stocks you have, running order status, floating profit / loss.
+- **Order Management System** tells you how many stocks you have, running order status, floating profit / loss.
 - **Market Data Feed Handler** listening the exchange activity and updating it's own orderbook.
 
 ```mermaid
@@ -191,7 +191,7 @@ for (int i = 0 ; i < connections.size(); i++) {
 
 Imagine we want to send 1000 packets, for 1000 HFT companies. That means we're gonna send 1 mil times, that's inefficient.
 
-### Unecessary TCP acks
+### Unnecessary TCP acks
 
 TCP protocol is reliable because it make sure the receiver get the message. One of the mechanism to make sure receiver get the message by acks mechanism.
 
@@ -311,3 +311,28 @@ flowchart LR
 ```
 
 ## How to do recovery when our system is down
+
+When Market Data Feed Handler has some gaps around 10 packets need to retransmitted, Market Data Feed Handler can just ask it directly to the Exchange. But what if the gaps of packets is really big? For example 30 minutes of gaps, which is can be hundred thousands of packets.
+
+```mermaid
+flowchart TB
+    EX[Exchange] -- "UDP multicast" --> NIC["Network Interface Card<br/>(NIC)"]
+    NIC -- "Raw packets" --> MDFH["Market Data Feed Handler"]
+    MDFH -. "Gap detected:<br/>request retransmit / snapshot" .-> EX
+```
+
+Instead of asking the **Exchange** to retransmit hundred of thousands missing packet, we will do other way.
+
+The reason why we don't ask to retransmit missing packets I think because of too many packets to give and receive.
+
+Both sides, **Exchange** and our **Market Data Feed Handler** thinks this is a heavy task to do, and I don't think **Exchange** have the capability to resend all of the missing packets at that time.
+
+Instead of asking to retransmit that much of packets, we can just ask the Exchange to give us the snapshot of the specific Orderbook.
+
+The protocol of asking to retransmit and snapshot are not using UDP Multicast, but it's using UDP unicast, since we're the only one to request that specific packets / snapshot, so no other system need to know which packets / snapshot we need.
+
+## Closing
+
+Thanks everyone for reading this, if you want to give some feedback or just want to say hi, can contact me on [Linkedin](https://www.linkedin.com/in/taufanmaaruf/).
+
+Next topic, I will discuss about Async Logger in Low Latency System.
