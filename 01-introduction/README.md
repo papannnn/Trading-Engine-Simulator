@@ -1,5 +1,3 @@
-Based on what I did learned, overall the Trader Facing HFT System will look like this.
-
 I learned all of this knowledge from doing a personal discussion with someone, shoutout to [Karan Lodhi Rajput](https://www.linkedin.com/in/karan-lodhi-rajput-b1a44b105/) for sharing this knowledge to me. 
 
 He also have a youtube channel that talks about HFT stuff. If you interested, you can also visit his [youtube channel](https://www.youtube.com/channel/UCl2vVwtbL0CIeB8YKK6q4ig)
@@ -11,9 +9,9 @@ In other companies production system, this can be different, but the main point 
 - **Trader** operates the system using GUI
 - **Risk Management System (RMS)** will check the risk & reject Trader's command / Strategy execution if RMS detect some risk.
 - **Strategy service** will decide what to buy or sell, at what price, when to cancel automatically based on the data it knows (Current price, how many stock we own, floating profit, etc).
-- **Exchange connector** will convert the request that system understands into something that can be understand by specific exchanges.
+- **Exchange Connector** will convert the request that system understands into something that can be understand by specific exchanges.
 - **Order Management System** tells you how many stocks you have, running order status, floating profit / loss.
-- **Market Data Feed Handler** listening the exchange activity and updating it's own orderbook.
+- **Market Data Feed Handler** listening the **Exchange** activity and updating it's own orderbook.
 
 ```mermaid
 flowchart LR
@@ -22,7 +20,7 @@ flowchart LR
     subgraph Control["Control plane (office or cloud)"]
         GUI[Trader GUI]
         Router[Command Router]
-        OMS["Order Management Service<br/>(positions, P&L)"]
+        OMS["Order Management System<br/>(positions, P&L)"]
         GUI -- "Commands" --> Router
         OMS -- "Positions, fills,<br/>floating P&L" --> GUI
     end
@@ -54,11 +52,9 @@ flowchart LR
     style EX fill:none,stroke:#e03131,stroke-width:2px,color:#e03131
 ```
 
-*s1 – s6 is strategy that can be executed by Strategy Node X*
-
 ## Exchange Connector
 
-The reason we require Exchange Connector because each exchange might having different way of communicating, we called this **protocol**.
+The reason we require **Exchange Connector** because each exchange might having different way of communicating, we called this **protocol**.
 
 This is just an example
 
@@ -83,7 +79,7 @@ So **Exchange Connector** is not only for forwarding the request from the **Trad
 
 ```mermaid
 flowchart LR
-    subgraph HFT["HFT System"]
+    subgraph HFT["HFT System Example"]
         direction LR
         Strategy -- "Request object" --> EC[Exchange Connector]
     end
@@ -129,7 +125,7 @@ With these information, we can create the orderbook that looks like this (Simpli
    900      100.30      |     100.80       700
 ```
 
-And then, based on the data from Orderbook, Strategy service now can decide what to do on `ABC` stock (Buy, Sell, Modify, Cancel, etc).
+And then, based on the data from Orderbook, **Strategy service** now can decide what to do on `ABC` stock (Buy, Sell, Modify, Cancel, etc).
 
 You may wondering, why we need sequence ID for each packets?
 
@@ -312,7 +308,7 @@ flowchart LR
 
 ## How to do recovery when our system is down
 
-When Market Data Feed Handler has some gaps around 10 packets need to retransmitted, Market Data Feed Handler can just ask it directly to the Exchange. But what if the gaps of packets is really big? For example 30 minutes of gaps, which is can be hundred thousands of packets.
+When **Market Data Feed Handler** has some gaps around 10 packets need to retransmitted, **Market Data Feed Handler** can just ask it directly to the **Exchange**. But what if the gaps of packets is really big? For example 30 minutes of gaps, which is can be hundred thousands of packets.
 
 ```mermaid
 flowchart TB
@@ -327,7 +323,7 @@ The reason why we don't ask to retransmit missing packets I think because of too
 
 Both sides, **Exchange** and our **Market Data Feed Handler** thinks this is a heavy task to do, and I don't think **Exchange** have the capability to resend all of the missing packets at that time.
 
-Instead of asking to retransmit that much of packets, we can just ask the Exchange to give us the snapshot of the specific Orderbook.
+Instead of asking to retransmit that much of packets, we can just ask the **Exchange** to give us the snapshot of the specific Orderbook.
 
 The protocol of asking to retransmit and snapshot are not using UDP Multicast, but it's using UDP unicast, since we're the only one to request that specific packets / snapshot, so no other system need to know which packets / snapshot we need.
 
