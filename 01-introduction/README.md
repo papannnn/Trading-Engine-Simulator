@@ -325,7 +325,7 @@ Both sides, **Exchange** and our **Market Data Feed Handler** thinks this is a h
 
 Instead of asking to retransmit that much of packets, we can just ask the **Exchange** to give us the snapshot of the specific Orderbook.
 
-The protocol of asking to retransmit and snapshot are not using UDP Multicast, but it's using UDP unicast, since we're the only one to request that specific packets / snapshot, so no other system need to know which packets / snapshot we need.
+The protocol of asking to retransmit and snapshot are not using UDP Multicast, but it possibly using UDP unicast / TCP connection / etc, since we're the only one to request that specific packets / snapshot, so no other system need to know which packets / snapshot we need.
 
 ## Closing
 
