@@ -78,3 +78,214 @@ ERROR [md-feed ] Snapshot timed out for MSFT, symbol halted
 ```
 
 When snapshot timed out for specific stock, that means the Orderbook for our system is not updated correctly, making the decision making of Strategy system has a high chance of false positive or making the Strategy system got shutdown for some specific stock, the impact is huge, we need to fix this.
+
+## Interface
+
+Based on the requirement that we have, we concluded the interface will look like this. Although we're gonna "break" this interface for performance reason, but for now, this is good enough for simple logger.
+
+```c++
+#include <string>
+
+enum class Level { Debug, Info, Warn, Error };
+
+class Logger {
+public:
+    void log(Level level, const std::string& message);
+
+    void debug(const std::string& message);
+    void info(const std::string& message);
+    void warn(const std::string& message);
+    void error(const std::string& message);
+};
+```
+
+We use the logger like this
+
+```c++
+Logger logger;
+logger.info(std::format("Order {} filled: {} @ {:.2f}", 7001, 100, 189.43));
+```
+
+## Design #1
+
+For the first design, we can do this one.
+
+```c++
+#include <iostream>
+
+void Logger::log(Level level, const std::string& message) {
+    switch (level) {
+        case Level::Debug: std::cout << "DEBUG "; break;
+        case Level::Info:  std::cout << "INFO ";  break;
+        case Level::Warn:  std::cout << "WARN ";  break;
+        case Level::Error: std::cout << "ERROR "; break;
+    }
+    std::cout << message << '\n';
+}
+
+void Logger::debug(const std::string& message) { log(Level::Debug, message); }
+void Logger::info(const std::string& message)  { log(Level::Info,  message); }
+void Logger::warn(const std::string& message)  { log(Level::Warn,  message); }
+void Logger::error(const std::string& message) { log(Level::Error, message); }
+```
+
+But for this design, there's some flaws we need to know.
+
+### System call increase the latency
+
+Under the hood, message that we passed to `cout` will eventually passed into `write` system call.
+
+We don't want system call happening in our hot path, because it will slow down the hot path's thread performance
+
+### String formatting in hot path increase the latency
+
+Converting
+
+```c++
+std::format("Order {} filled: {} @ {:.2f}", 7001, 100, 189.43)
+```
+
+Into this string
+
+```c++
+Order 7001 filled: 100 @ 189.43
+```
+
+Is not cheap, but still acceptable in non hot path, we will fix this in the last design because this requires "breaking" the interface.
+
+### Using long string introduces heap allocation
+
+`string` actually lives either in `stack` memory or `heap` memory, depending how long the `string`, if the `string` is short, the implementation will using `Small String Optimization (SSO)`.
+
+Under the hood, it's basically using `stack` to store the `string` value. If the `string` is long, `SSO` can't be used at all.
+
+We don't want to trigger heap allocation, heap allocation eventually will trigger system call, system call will increase the latency of our system, especially in hot path.
+
+## Design #2
+
+Instead of logging the message in the same thread, we can delegate the `cout` calling on another thread.
+
+```c++
+class Logger {
+public:
+    void log(Level level, const std::string& message) {
+        worker_.push({level, message});
+    }
+
+    void debug(const std::string& message) { log(Level::Debug, message); }
+    void info(const std::string& message)  { log(Level::Info,  message); }
+    void warn(const std::string& message)  { log(Level::Warn,  message); }
+    void error(const std::string& message) { log(Level::Error, message); }
+
+private:
+    LogWorker worker_;
+};
+```
+
+```c++
+class LogWorker {
+public:
+    LogWorker() : thread_([this] { run(); }) {}
+
+    ~LogWorker() {
+        stop_ = true;
+        thread_.join();
+    }
+
+    void push(const LogEntry& entry) {
+        if (!buffer_.try_push(entry)) {
+            ++dropped_;
+        }
+    }
+
+private:
+    void run() {
+        LogEntry entry;
+        while (!stop_) {
+            while (buffer_.try_pop(entry)) {
+                print(entry);
+            }
+        }
+        while (buffer_.try_pop(entry)) {   // write out anything pushed before stop
+            print(entry);
+        }
+    }
+
+    static void print(const LogEntry& entry) {
+        switch (entry.level) {
+            case Level::Debug: std::cout << "DEBUG "; break;
+            case Level::Info:  std::cout << "INFO ";  break;
+            case Level::Warn:  std::cout << "WARN ";  break;
+            case Level::Error: std::cout << "ERROR "; break;
+        }
+        std::cout << entry.message << '\n';
+    }
+
+    RingBuffer<LogEntry, 1024> buffer_;
+    std::atomic<bool> stop_{false};
+    std::atomic<std::size_t> dropped_{0};
+    std::thread thread_;
+};
+```
+
+```mermaid
+flowchart TB
+    subgraph TT["Trading thread (hot path)"]
+        A["Your code<br/>logger.info(msg)"] --> B["Logger<br/>only inserts"]
+        B --> C["LogWorker<br/>push(entry)"]
+    end
+
+    C --> RB["RingBuffer<br/>try_push / try_pop"]
+    RB -. full .-> D["Dropped<br/>if buffer is full"]
+
+    subgraph WT["Worker thread (background)"]
+        E["run()<br/>pops entries"] --> F["cout<br/>system call here"]
+    end
+
+    RB --> E
+```
+
+That means, after hot path calls
+
+```c++
+logger.info(std::format("Order {} filled: {} @ {:.2f}", 7001, 100, 189.43));
+```
+
+It's just inserting to the queue on `LogWorker`, and `LogWorker` eventually will execute that message and call `cout`.
+
+The data structure that we use for the queue is called `RingBuffer`, `RingBuffer` basically is a lock free data structure that can be used as a queue.
+
+More detailed explanation is on another topic.
+
+For the non hot path, this design actually already good enough. But this still not solving the string formatting problem and heap allocation on string.
+
+## Design #3
+
+It time to "break" our interface a little bit for improving performance. Instead of only accepting string, we also accepting struct object.
+
+The reason we use struct object because we will delegate the string creation on another worker (Formatter Worker), and then after Formatter Worker created the string, string will be passed into LogWorker to be logged.
+
+```mermaid
+flowchart TB
+    subgraph TT["Trading thread (hot path)"]
+        A["Your code<br/>logger.info(event)"] --> B["Logger<br/>picks log()"]
+        B --> C["FormatWorker<br/>push: copy bytes"]
+    end
+
+    C --> RB1["Ring buffer 1<br/>level, fn, bytes"]
+
+    subgraph FT["Format thread"]
+        D["FormatWorker<br/>run: pop entry"] --> E["to_string()<br/>bytes to string"]
+        E --> F["LogWorker<br/>push(string)"]
+    end
+
+    RB1 --> D
+    F --> RB2["Ring buffer 2<br/>level, string"]
+
+    subgraph OT["Output thread"]
+        G["LogWorker<br/>run: pop entry"] --> H["cout<br/>print the line"]
+    end
+
+    RB2 --> G
+```
+
