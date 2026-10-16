@@ -558,4 +558,8 @@ It's because in production environment, we usually only enable minimum log level
 
 Thanks everyone for reading this, if you want to give some feedback or just want to say hi, can contact me on [Linkedin](https://www.linkedin.com/in/taufanmaaruf/).
 
+Also huge shoutout to [Karan Lodhi Rajput](https://www.linkedin.com/in/karan-lodhi-rajput-b1a44b105/) for sharing this knowledge to me. 
+
+He also have a youtube channel that talks about HFT stuff. If you interested, you can also visit his [youtube channel](https://www.youtube.com/channel/UCl2vVwtbL0CIeB8YKK6q4ig)
+
 Next topic, I will discuss Memory Pool
