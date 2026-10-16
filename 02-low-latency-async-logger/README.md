@@ -265,6 +265,8 @@ It time to "break" our interface a little bit for improving performance. Instead
 
 The reason we use struct object because we will delegate the string creation on another worker (Formatter Worker), and then after Formatter Worker created the string, string will be passed into LogWorker to be logged.
 
+And struct object creation are cheap, we basically creating the value on the stack, which is cheap and fast.
+
 ```mermaid
 flowchart TB
     subgraph TT["Trading thread (hot path)"]
@@ -272,20 +274,288 @@ flowchart TB
         B --> C["FormatWorker<br/>push: copy bytes"]
     end
 
-    C --> RB1["Ring buffer 1<br/>level, fn, bytes"]
+    C --> RBF["Ring buffer formatter<br/>level, fn, bytes"]
 
     subgraph FT["Format thread"]
         D["FormatWorker<br/>run: pop entry"] --> E["to_string()<br/>bytes to string"]
         E --> F["LogWorker<br/>push(string)"]
     end
 
-    RB1 --> D
-    F --> RB2["Ring buffer 2<br/>level, string"]
+    RBF --> D
+    F --> RBO["Ring buffer output<br/>level, string"]
 
     subgraph OT["Output thread"]
         G["LogWorker<br/>run: pop entry"] --> H["cout<br/>print the line"]
     end
 
-    RB2 --> G
+    RBO --> G
 ```
 
+So we start from making the struct that already know how to convert it into string
+
+```c++
+struct OrderFilled {
+    int id;
+    int qty;
+    double price;
+
+    std::string to_string() const {
+        return std::format("Order {} filled: {} @ {:.2f}", id, qty, price);
+    }
+};
+
+struct Text {                       // plain strings are wrapped in this
+    char value[120];
+
+    Text() = default;
+
+    explicit Text(std::string_view message) {
+        std::size_t n = std::min(message.size(), sizeof(value) - 1);
+        std::memcpy(value, message.data(), n);
+        value[n] = '\0';
+    }
+
+    std::string to_string() const { return value; }
+};
+
+template <typename T>
+concept Loggable = requires(const T& event) { event.to_string(); };
+```
+
+Then we pass the struct / string into Logger object
+
+```c++
+class Logger {
+public:
+    void log(Level level, std::string_view message) { formatter_.push(level, Text(message)); }
+
+    template <Loggable T>
+    void log(Level level, const T& event) { formatter_.push(level, event); }
+
+    template <typename T> void debug(const T& value) { log(Level::Debug, value); }
+    template <typename T> void info(const T& value)  { log(Level::Info,  value); }
+    template <typename T> void warn(const T& value)  { log(Level::Warn,  value); }
+    template <typename T> void error(const T& value) { log(Level::Error, value); }
+
+private:
+    FormatWorker formatter_;
+};
+```
+
+We use logger object like this
+
+```c++
+Logger logger;
+
+OrderFilled fill{7001, 100, 189.43};
+logger.debug(fill);
+
+// Or in one line
+logger.debug(OrderFilled{7001, 100, 189.43});
+```
+
+After we called `debug` from `Logger` object, `Logger` object will delegate the formatting to `FormatWorker` queue.
+
+```c++
+class FormatWorker {
+public:
+    explicit FormatWorker(LogWorker& output) : output_(output), thread_([this] { run(); }) {}
+
+    ~FormatWorker() {
+        stop_ = true;
+        thread_.join();
+    }
+
+    // Trading thread: copy bytes only, no formatting, no allocation
+    template <Loggable T>
+    void push(Level level, const T& event) {
+        static_assert(std::is_trivially_copyable_v<T>, "struct must be safe to memcpy");
+        static_assert(sizeof(T) <= sizeof(Entry::data), "struct too big for one slot");
+
+        Entry entry;
+        entry.level = level;
+        entry.to_string = [](const char* data) {
+            T event;
+            std::memcpy(&event, data, sizeof(T));
+            return event.to_string();
+        };
+        std::memcpy(entry.data, &event, sizeof(T));
+
+        if (!ring_buffer_formatter_.try_push(entry)) ++dropped_;
+    }
+
+private:
+    struct Entry {
+        Level level;
+        std::string (*to_string)(const char* data);
+        char data[128];
+    };
+
+    // Format thread: turn bytes into a string, hand it to LogWorker
+    void run() {
+        Entry entry;
+        while (!stop_) {
+            while (ring_buffer_formatter_.try_pop(entry)) {
+                output_.push({entry.level, entry.to_string(entry.data)});
+            }
+        }
+        while (ring_buffer_formatter_.try_pop(entry)) {   // anything pushed before stop
+            output_.push({entry.level, entry.to_string(entry.data)});
+        }
+    }
+
+    LogWorker& output_;
+    RingBuffer<Entry, 1024> ring_buffer_formatter_;
+    std::atomic<bool> stop_{false};
+    std::atomic<std::size_t> dropped_{0};
+    std::thread thread_;
+};
+```
+
+Basically what it does is to convert the struct that we pass, into string that can be read by `LogWorker`.
+
+After the formatting complete, the string will be passed into `LogWorker` queue.
+
+```c++
+class LogWorker {
+public:
+    LogWorker() : thread_([this] { run(); }) {}
+
+    ~LogWorker() {
+        stop_ = true;
+        thread_.join();
+    }
+
+    // Format thread: hand over a finished string
+    void push(const LogEntry& entry) {
+        if (!ring_buffer_output_.try_push(entry)) ++dropped_;
+    }
+
+private:
+    // Output thread: the only place that touches cout
+    void run() {
+        LogEntry entry;
+        while (!stop_) {
+            while (ring_buffer_output_.try_pop(entry)) {
+                print(entry);
+            }
+        }
+        while (ring_buffer_output_.try_pop(entry)) {      // anything pushed before stop
+            print(entry);
+        }
+    }
+
+    static void print(const LogEntry& entry) {
+        switch (entry.level) {
+            case Level::Debug: std::cout << "DEBUG "; break;
+            case Level::Info:  std::cout << "INFO ";  break;
+            case Level::Warn:  std::cout << "WARN ";  break;
+            case Level::Error: std::cout << "ERROR "; break;
+        }
+        std::cout << entry.message << '\n';
+    }
+
+    RingBuffer<LogEntry, 1024> ring_buffer_output_;
+    std::atomic<bool> stop_{false};
+    std::atomic<std::size_t> dropped_{0};
+    std::thread thread_;
+};
+```
+
+Compared to Design #1, this Logger is much better.
+
+## Handling minimum level of logger
+
+In production environment, we don't want to enable `DEBUG` level because it's too verbose. But we want to change the minimum level on the fly when we need it.
+
+For example, when we need to `DEBUG` the production environment behavior when something is wrong.
+
+```mermaid
+flowchart TB
+    subgraph CT["Config thread (every second)"]
+        DB["Config DB<br/>level = DEBUG"] --> W["watch_config()<br/>read level"]
+        W --> S["set_level()<br/>store new level"]
+    end
+
+    S --> L["min_level_<br/>std::atomic#lt;Level#gt;"]
+
+    subgraph TT["Trading thread (hot path)"]
+        A["Your code<br/>logger.debug(...)"] --> B["Logger<br/>level #lt; min?"]
+        B -- passes --> C["FormatWorker<br/>push: copy bytes"]
+    end
+
+    L -. read .-> B
+    B -. below minimum .-> X["Skipped<br/>returns right away"]
+    C --> R["Format + output threads<br/>format, then print"]
+```
+
+We add 1 more class to fetch the config every `X` seconds.
+
+```c++
+class ConfigWatcher {
+public:
+    explicit ConfigWatcher(Logger& logger) : logger_(logger), thread_([this] { run(); }) {}
+
+    ~ConfigWatcher() {
+        stop_ = true;
+        thread_.join();
+    }
+
+private:
+    void run() {
+        while (!stop_) {
+            logger_.set_level(read_level_from_config());   // database, file, HTTP...
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
+    }
+
+    Logger& logger_;
+    std::atomic<bool> stop_{false};
+    std::thread thread_;
+};
+```
+
+We tweak the logger class a little bit to add minimum level validation.
+
+```c++
+class Logger {
+public:
+    void set_level(Level level) {
+        min_level_.store(level, std::memory_order_relaxed);
+    }
+
+    void log(Level level, std::string_view message) {
+        if (is_skipped(level)) [[likely]] return;
+        formatter_.push(level, Text(message));
+    }
+
+    template <Loggable T>
+    void log(Level level, const T& event) {
+        if (is_skipped(level)) [[likely]] return;
+        formatter_.push(level, event);
+    }
+
+    template <typename T> void debug(const T& value) { log(Level::Debug, value); }
+    template <typename T> void info(const T& value)  { log(Level::Info,  value); }
+    template <typename T> void warn(const T& value)  { log(Level::Warn,  value); }
+    template <typename T> void error(const T& value) { log(Level::Error, value); }
+
+private:
+    bool is_skipped(Level level) const {
+        return level < min_level_.load(std::memory_order_relaxed);
+    }
+
+    std::atomic<Level> min_level_{Level::Info};
+    FormatWorker formatter_;
+};
+```
+
+Noticed I added `[[likely]]` there?
+
+It's because in production environment, we usually only enable minimum log level `INFO`, and because `DEBUG` level usually a lot, a lot of `DEBUG` level log will get dropped. We use `[[likely]]` to give a hint to compiler that this line of code will `likely` got executed, helping to minimize the `Control Hazard`.
+
+## Closing
+
+Thanks everyone for reading this, if you want to give some feedback or just want to say hi, can contact me on [Linkedin](https://www.linkedin.com/in/taufanmaaruf/).
+
+Next topic, I will discuss Memory Pool
