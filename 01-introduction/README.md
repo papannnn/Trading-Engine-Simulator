@@ -331,4 +331,4 @@ The protocol of asking to retransmit and snapshot are not using UDP Multicast, b
 
 Thanks everyone for reading this, if you want to give some feedback or just want to say hi, can contact me on [Linkedin](https://www.linkedin.com/in/taufanmaaruf/).
 
-Next topic, I will discuss about Async Logger in Low Latency System.
+Next topic, I will discuss about [Async Logger in Low Latency System](../02-low-latency-async-logger/README.md).
