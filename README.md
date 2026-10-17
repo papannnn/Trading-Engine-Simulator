@@ -7,7 +7,7 @@ The reference of the notes / code will be attached on the README on each topics.
 ## Topic List
 
 - [Introduction](./01-introduction/README.md)
-- [Async Logger in Low Latency System](./02-low-latency-async-logger/README.md)
+- Async Logger in Low Latency System (Soon)
 - Memory Pool (Soon)
 - Thread Pool (Soon)
 - Will add more soon
