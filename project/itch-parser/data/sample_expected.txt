@@ -1,0 +1,23 @@
+Expected decode of sample.itch (TotalView-ITCH 5.0, 2-byte big-endian length prefix per message)
+Timestamps: nanoseconds since midnight. Prices: integer with 4 implied decimals. Tracking number = 0 on all messages.
+
+ 1  len=12  S SystemEvent    ts=10800000000000 locate=0 event=O
+ 2  len=39  R StockDirectory ts=10801000000000 locate=1 stock=AAPL mkt=Q fin=N roundlot=100 roundlotsonly=N class=C subtype='Z ' auth=P ssti=N ipo=N luld=1 etp=N lev=0 inv=N
+ 3  len=39  R StockDirectory ts=10801000000500 locate=2 stock=MSFT mkt=Q fin=N roundlot=100 roundlotsonly=N class=C subtype='Z ' auth=P ssti=N ipo=N luld=1 etp=N lev=0 inv=N
+ 4  len=12  S SystemEvent    ts=14400000000000 locate=0 event=S
+ 5  len=12  S SystemEvent    ts=34200000000000 locate=0 event=Q
+ 6  len=36  A AddOrder       ts=34200000001000 locate=1 ref=1 side=B shares=100 stock=AAPL price=1502500 (150.2500)
+ 7  len=36  A AddOrder       ts=34200000002000 locate=1 ref=2 side=S shares=200 stock=AAPL price=1503000 (150.3000)
+ 8  len=40  F AddOrderMPID   ts=34200000003000 locate=1 ref=3 side=B shares=50 stock=AAPL price=1502000 (150.2000) mpid=GSCO
+ 9  len=36  A AddOrder       ts=34200000004000 locate=2 ref=4 side=B shares=10 stock=MSFT price=4105000 (410.5000)
+10  len=31  E Executed       ts=34201000000000 locate=1 ref=2 executed=50 match=1
+11  len=36  C ExecutedPrice  ts=34202000000000 locate=1 ref=1 executed=100 match=2 printable=Y price=1502600 (150.2600)
+12  len=23  X Cancel         ts=34203000000000 locate=1 ref=2 canceled=50
+13  len=35  U Replace        ts=34204000000000 locate=1 oldref=3 newref=5 shares=75 price=1502200 (150.2200)
+14  len=44  P Trade          ts=34205000000000 locate=1 ref=0 side=B shares=300 stock=AAPL price=1502800 (150.2800) match=3
+15  len=31  E Executed       ts=34206000000000 locate=2 ref=4 executed=10 match=4
+16  len=19  D Delete         ts=34207000000000 locate=1 ref=5
+17  len=19  D Delete         ts=34208000000000 locate=1 ref=2
+18  len=12  S SystemEvent    ts=57600000000000 locate=0 event=M
+19  len=12  S SystemEvent    ts=72000000000000 locate=0 event=E
+20  len=12  S SystemEvent    ts=72300000000000 locate=0 event=C
